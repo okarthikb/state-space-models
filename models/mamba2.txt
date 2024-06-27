@@ -3,11 +3,11 @@ map (l,) -> (l,) using structured matrices A, B, and C of shapes (l,), (l, n), a
 respectively where n is d_state. the 1-SS matrix L = segsum(A) of shape (l, l) transforms the loop
 
 y = []
-h = jnp.zeros(n)
+H = jnp.zeros(n)
 for a_t, B_t, C_t in zip(A, B, C):
-    h = a_t * h + B_t * x_t  # () * (n,) + (n,) * () = (n,)
-    y.append(h @ C_t.T)  # (n,) @ (n,).T = ()
-y = jnp.array(y)  # (l,)
+    H = a_t * H + B_t * x_t  # () * (n,) + (n,) * () = (n,)
+    y.append(H @ C_t.T)  # (n,) @ (n,).T = ()
+y = jnp.stack(y)  # (l,)
 
 into a single matrix multiplication
 
