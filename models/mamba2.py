@@ -149,8 +149,8 @@ def rms_norm_gated(
 def segsum(x: Float[Array, '*b l']) -> Float[Array, '*b l l']:
     """
     computes the 1-SS matrix for a sequence [ x_1, ..., x_l ] which is a
-    lower triangular matrix M of shape (n, n) having diagonal elements 1
-    and for all 2 <= i <= l and 1 <= j < i, M_ij = x_1 * ... * x_{i - j}
+    lower triangular matrix L of shape (n, n) having diagonal elements 1
+    and for all 2 <= i <= l and 1 <= j < i, L_ij = x_1 * ... * x_{i - j}
 
     this causes numerical issues for large l, so we compute the cumulative sums
     for log(x) instead of cumulative products for x. the input is assumed to be
@@ -192,7 +192,7 @@ def ssd(
     the sequential computation into a matrix multiplication. the result is an attention
     analogue with a special mask and without the softmax
 
-    for a single channel of an embedding sequence, the 1-SS matrix M transforms
+    for a single channel of an embedding sequence, the 1-SS matrix L transforms
    
     y = []
     h = jnp.zeros(n)
@@ -205,7 +205,9 @@ def ssd(
 
     y = M @ x
 
-    where x, A, B, and C are of shapes (l,), (l,), (l, n), (l, n)
+    where x, A, B, and C are of shapes (l,), (l,), (l, n), (l, n) and
+
+    M = L * (C @ B^T)
 
     the computation can be shared across dh channels, in which case the shapes are
     (l, dh), (l,), (l, n), (l, n)
