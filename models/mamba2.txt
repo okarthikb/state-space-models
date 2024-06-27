@@ -64,13 +64,32 @@ y_l = (a_{l - 1} * ... * a_1) * C_{l - 1} @ B_0^T * x_0 +
 
 for example
 
-H_3 = a_3 * a_2 * a_1 * (C_3 @ B_0^T) * x_0 + 
+y_3 = a_3 * a_2 * a_1 * (C_3 @ B_0^T) * x_0 + 
       a_3 * a_2 * (C_3 @ B_1^T) * x_1 +
       a_3 * (C_3 @ B_2^T) * x_2 + 
       (C_3 @ B_3^T) * x_3
 
 if you look carefully, you can see that it is equivalent to a masked and weighted query-key dot product
-where C is analogous Q and B is analogous to K. the mask for y_t is 
+where C is analogous Q and B is analogous to K. in the example above, we are dealing with output at
+position 3. this is calculated by taking dot product of C_3 with B_3, ..., B_0, but not
+with B_4, ..., B_l (so it's causal)
+
+scores = C_3 @ B^T
+
+then for each of these dot products (scores), we elementwise multiply them with a mask. everything
+after position 3 should be zeroed
+                  0                         3        l - 1
+                  |                         |          |
+scores = [ a_3 * a_2 * a_1, a_3 * a_2, a_3, 1, 0, ..., 0 ]
+
+and finally, we take these scores and mat mul with our sequence
+
+y_3 = scores @ x^T
+
+very attention-y! the SSD framework (highly recommend the paper: https://arxiv.org/abs/2405.21060) explores
+a lot of these connections between state-space models and attention (linear attention variants specifically)
+
+in general, the mask for y_t is 
 
                             0                                           t - 1    t        l - 1
                             |                                             |      |          |       
