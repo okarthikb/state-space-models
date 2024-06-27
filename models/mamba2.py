@@ -95,9 +95,8 @@ def initialize_params(key, args):
     conv_bias = jnp.zeros((args.n_layer, args.conv_dim)) if args.conv_bias else None
     
     dt = random.uniform(layers_keys[2], (args.n_layer, args.n_heads))
-    dt = jnp.exp(
-        dt * (math.log(args.dt_max) - math.log(args.dt_min)) + math.log(args.dt_min)
-    ).clip(min=args.dt_init_floor)
+    dt = jnp.exp(dt * (math.log(args.dt_max) - math.log(args.dt_min)) + math.log(args.dt_min))
+    dt = dt.clip(min=args.dt_init_floor)
     dt_bias = dt + jnp.log(-jnp.expm1(-dt))
     
     A_log = jnp.log(random.uniform(layers_keys[3], (args.n_layer, args.n_heads), minval=A_min, maxval=A_max))
