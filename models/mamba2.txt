@@ -70,7 +70,7 @@ y_3 = a_3 * a_2 * a_1 * (C_3 @ B_0^T) * x_0 +
       (C_3 @ B_3^T) * x_3
 
 if you look carefully, you can see that it is equivalent to a masked and weighted query-key dot product
-where C is analogous Q and B is analogous to K. in the example above, we are dealing with output at
+where C is analogous to Q and B is analogous to K. in the example above, we are dealing with output at
 position 3. this is calculated by taking dot product of C_3 with B_3, ..., B_0, but not
 with B_4, ..., B_l (so it's causal)
 
