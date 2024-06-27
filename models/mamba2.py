@@ -331,13 +331,13 @@ def mamba2_step(args, valid_logits, params, token, cache):
     return logits[:args.orig_vocab_size if valid_logits else args.vocab_size], cache
 
 
-# character-level generation
-def generate(key, args, encode, params, steps, temperature, prompt, cache=None):
+# basic character-level generation
+def generate(key, args, params, ctoi, itoc, steps, temperature, prompt, cache=None):
     print(prompt, end='')
     
     f = jit(partial(mamba2_step, args, True, params))
 
-    tokens = jnp.array(encode(prompt))
+    tokens = jnp.array([ctoi[c] for c in prompt], dtype=jnp.int32)
 
     for token in tokens:
         logits, cache = f(token, cache)
@@ -350,5 +350,6 @@ def generate(key, args, encode, params, steps, temperature, prompt, cache=None):
         logits, cache = f(token, cache)
         token = random.categorical(subkey, logits / temperature)
         print(itoc[int(token)], end='')
+    print()
     
     return cache
