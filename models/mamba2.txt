@@ -89,7 +89,13 @@ y_3 = scores @ x^T
 very attention-y! the SSD framework (highly recommend the paper: https://arxiv.org/abs/2405.21060) explores
 a lot of these connections between state-space models and attention (linear attention variants specifically)
 
-in general, the mask for y_t is 
+the "structured matrix" part: matrix A for example technically represents a matrix of shape (n, n) but because 
+the structure is "a diagonal matrix with all diagonal elements same", we can treat it as a scalar, which allows
+us to come up with the simplification above
+
+continuing
+
+the mask for y_t is 
 
                             0                                           t - 1    t        l - 1
                             |                                             |      |          |       
