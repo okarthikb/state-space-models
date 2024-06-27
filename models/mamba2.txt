@@ -1,0 +1,102 @@
+consider the SSM for a single channel of an embedding sequence. it is a sequence to sequence 
+map (l,) -> (l,) using structured matrices A, B, and C of shapes (l,), (l, n), and (l, n)
+respectively where n is d_state. the 1-SS matrix M of shape (l, l) transforms the loop
+
+y = []
+h = jnp.zeros(n)
+for a_t, B_t, C_t in zip(A, B, C):
+    h = a_t * h + B_t * x_t  # () * (n,) + (n,) * () = (n,)
+    y.append(h @ C_t.T)  # (n,) @ (n,).T = ()
+y = jnp.array(y)  # (l,)
+
+into a single matrix multiplication
+
+y = M @ x  # (l, l) @ (l,) = (l,)
+
+we see below how. the tensors involved are
+
+x_t: ()
+a_t: ()
+B_t: (n,)  
+C_t: (n,)
+
+the recurrence as seen above is
+
+H_t = a_t * H_{t - 1} + B_t * x_t  # (n,)
+y_t = H_t @ C_t^T  # ()
+
+where a_t, B_t, and C_t are shared across channels and are discretized before computing the recurrence
+
+we can expand the recurrence to see a pattern
+
+H_{-1} = 0  # (n,)
+
+H_0 = a_0 * H_{-1} + B_0 * x_0
+...
+H_{l - 1} = a_{l - 1} * H_{l - 2} + B_{l - 1} * x_{l - 1}  # l hidden states
+
+expanding from H_{l - 1}
+
+H_{l - 1} = a_{l - 1} * (a_{l - 2} * H_{l - 3} + B_{l - 2} * x_{l - 2}) + B_{l - 1} * x_{l - 1}
+          = (a_{l - 1} * a_{l - 2}) * H_{l - 3} + a_{l - 1} * B_{l - 2} * x_{l - 2} + B_{l - 1} * x_{l - 1}
+
+expanding until we get to H_{-1}, we have 
+          
+H_{l - 1} = (a_{l - 1} * ... * a_0) * H_{-1} + (a_{l - 1} * ... * a_1) * B_0 * x_0
+                                             + (a_{l - 1} * ... * a_2) * B_1 * x_1
+                                             ...
+                                             + (a_{l - 1} * a_{l - 2}) * B_{l - 3} * x_{l - 3}
+                                             + a_{l - 1} * B_{l - 2} * x_{l - 2}
+                                             + B_{l - 1} * x_{l - 1}
+
+then we do the read out
+
+y_l = H_{l - 1} @ C_{l - 1}^T
+
+since H_{-1} = 0 we have
+
+y_l = (a_{l - 1} * ... * a_1) * C_{l - 1} @ B_0^T * x_0 +
+      (a_{l - 1} * ... * a_2) * C_{l - 1} @ B_1^T * x_1 +
+      ...
+      (a_{l - 1} * a_{l - 2}) * C_{l - 1} @ B_{l - 3}^T * x_{l - 3} +
+      a_{l - 1} * C_{l - 1} @ B_{l - 2}^T * x_{l - 2} +
+      C_{l - 1} @ B_{l - 1}^T * x_{l - 1}
+
+for example
+
+H_3 = a_3 * a_2 * a_1 * (C_3 @ B_0^T) * x_0 + 
+      a_3 * a_2 * (C_3 @ B_1^T) * x_1 +
+      a_3 * (C_3 @ B_2^T) * x_2 + 
+      (C_3 @ B_3^T) * x_3
+
+if you look carefully, you can see that it is equivalent to a masked and weighted query-key dot product
+where C is analogous Q and B is analogous to K. the mask for y_t is 
+
+                            0                                           t - 1    t        l - 1
+                            |                                             |      |          |       
+MASK_{t - 1} = [ (a_1 * ... * a_{t - 1}), ..., a_{t - 2} * a_{t - 1}, a_{t - 1}, 1, 0, ..., 0 ]
+
+let L = [ MASK_0,
+          MASK_1,
+          ...,
+          MASK_{l - 1} ]   # weighted mask
+ 
+      = [ [ 1, 0, 0, ..., 0 ],
+          [ a_1, 1, 0, ..., 0 ],
+          [ a_1 * a_2, a_1, 1, ..., 0 ],
+          ...
+          [ (a_1 * ... * a_{l - 1}), ..., 1 ] ]  # (l, l)
+
+L is the 1-semiseparable (1-SS) matrix
+
+the SSM matrix is now
+
+M = L * (C @ B^T)  # (l, l) * ((l, n) @ (l, n).T) = (l, l)
+
+now given a sequence x of shape (l,)
+
+y = M @ x
+
+is the SSM output
+
+if x is of shape (l, dh) (multiple channels), the same equation applies
