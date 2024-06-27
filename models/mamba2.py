@@ -331,7 +331,8 @@ def mamba2_step(args, valid_logits, params, token, cache):
     return logits[:args.orig_vocab_size if valid_logits else args.vocab_size], cache
 
 
-def generate(key, args, params, steps, temperature, prompt, cache=None):
+# character-level generation
+def generate(key, args, encode, params, steps, temperature, prompt, cache=None):
     print(prompt, end='')
     
     f = jit(partial(mamba2_step, args, True, params))
