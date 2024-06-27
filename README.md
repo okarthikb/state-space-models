@@ -3,4 +3,4 @@
 implementations of SSMs and related algorithms
 
 models:
- - mamba2.py
+ - mamba2
