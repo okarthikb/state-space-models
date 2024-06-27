@@ -1,6 +1,6 @@
 consider the SSM for a single channel of an embedding sequence. it is a sequence to sequence 
 map (l,) -> (l,) using structured matrices A, B, and C of shapes (l,), (l, n), and (l, n)
-respectively where n is d_state. the 1-SS matrix M of shape (l, l) transforms the loop
+respectively where n is d_state. the 1-SS matrix L = segsum(A) of shape (l, l) transforms the loop
 
 y = []
 h = jnp.zeros(n)
@@ -12,6 +12,10 @@ y = jnp.array(y)  # (l,)
 into a single matrix multiplication
 
 y = M @ x  # (l, l) @ (l,) = (l,)
+
+where
+
+M = L * (C @ B^T)
 
 we see below how. the tensors involved are
 
