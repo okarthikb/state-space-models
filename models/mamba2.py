@@ -1,14 +1,11 @@
 import math
-
 import jax
 import jax.nn as nn
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as random
-
 from jax import vmap, jit
 from einops import rearrange, repeat, einsum
-
 from functools import partial
 from dataclasses import dataclass
 from typing import Tuple, NamedTuple
@@ -19,7 +16,7 @@ from beartype import beartype as typechecker
 @dataclass
 class ModelArgs:
     d_model: int
-    n_layer: int
+    n_layers: int
     vocab_size: int
     d_state: int = 64
     d_conv: int = 4
@@ -84,26 +81,26 @@ def initialize_params(key, args):
 
     embedding = random.truncated_normal(embed_key, -2, 2, (args.vocab_size, args.d_model)) * d_model_scale
 
-    norm = jnp.ones((args.n_layer, args.d_model))
+    norm = jnp.ones((args.n_layers, args.d_model))
 
-    norm_y = jnp.ones((args.n_layer, args.d_inner))
+    norm_y = jnp.ones((args.n_layers, args.d_inner))
     
-    in_proj = random.truncated_normal(layers_keys[0], -2, 2, (args.n_layer, args.d_model, args.d_in_proj)) * d_model_scale
-    in_proj_bias = jnp.zeros((args.n_layer, args.d_in_proj)) if args.bias else None
+    in_proj = random.truncated_normal(layers_keys[0], -2, 2, (args.n_layers, args.d_model, args.d_in_proj)) * d_model_scale
+    in_proj_bias = jnp.zeros((args.n_layers, args.d_in_proj)) if args.bias else None
     
-    conv = random.truncated_normal(layers_keys[1], -2, 2, (args.n_layer, args.conv_dim, args.d_conv)) * conv_dim_scale
-    conv_bias = jnp.zeros((args.n_layer, args.conv_dim)) if args.conv_bias else None
+    conv = random.truncated_normal(layers_keys[1], -2, 2, (args.n_layers, args.conv_dim, args.d_conv)) * conv_dim_scale
+    conv_bias = jnp.zeros((args.n_layers, args.conv_dim)) if args.conv_bias else None
     
-    dt = random.uniform(layers_keys[2], (args.n_layer, args.n_heads))
+    dt = random.uniform(layers_keys[2], (args.n_layers, args.n_heads))
     dt = jnp.exp(dt * (math.log(args.dt_max) - math.log(args.dt_min)) + math.log(args.dt_min))
     dt = dt.clip(min=args.dt_init_floor)
     dt_bias = dt + jnp.log(-jnp.expm1(-dt))
     
-    A_log = jnp.log(random.uniform(layers_keys[3], (args.n_layer, args.n_heads), minval=A_min, maxval=A_max))
-    D = jnp.ones((args.n_layer, args.n_heads))
+    A_log = jnp.log(random.uniform(layers_keys[3], (args.n_layers, args.n_heads), minval=A_min, maxval=A_max))
+    D = jnp.ones((args.n_layers, args.n_heads))
     
-    out_proj = random.truncated_normal(layers_keys[4], -2, 2, (args.n_layer, args.d_inner, args.d_model)) * d_inner_scale
-    out_proj_bias = jnp.zeros((args.n_layer, args.d_model)) if args.bias else None
+    out_proj = random.truncated_normal(layers_keys[4], -2, 2, (args.n_layers, args.d_inner, args.d_model)) * d_inner_scale
+    out_proj_bias = jnp.zeros((args.n_layers, args.d_model)) if args.bias else None
     
     layers = LayerParams(
         norm=norm,
@@ -320,8 +317,8 @@ def mamba2_step(args, valid_logits, params, token, cache):
 
     if cache is None:
         cache = (
-            jnp.zeros((args.n_layer, args.conv_dim, args.d_conv - 1)),
-            jnp.zeros((args.n_layer, args.n_heads, args.d_head, args.d_state))
+            jnp.zeros((args.n_layers, args.conv_dim, args.d_conv - 1)),
+            jnp.zeros((args.n_layers, args.n_heads, args.d_head, args.d_state))
         )
 
     x, cache = lax.scan(f, x, (params.layers, cache))
@@ -331,25 +328,25 @@ def mamba2_step(args, valid_logits, params, token, cache):
     return logits[:args.orig_vocab_size if valid_logits else args.vocab_size], cache
 
 
-# basic character-level generation
-def generate(key, args, params, ctoi, itoc, steps, temperature, prompt, cache=None):
+def generate(key, args, params, tokenizer, steps, temperature, prompt, cache=None):
     print(prompt, end='')
     
     f = jit(partial(mamba2_step, args, True, params))
 
-    tokens = jnp.array([ctoi[c] for c in prompt], dtype=jnp.int32)
+    tokens = jnp.array(tokenizer.encode(prompt), dtype=jnp.int32)
 
     for token in tokens:
         logits, cache = f(token, cache)
   
     token = random.categorical(key, logits / temperature)
-    print(itoc[int(token)], end='')
+    print(tokenizer.id_to_token(int(token)), end='')
 
     for _ in range(steps):
         key, subkey = random.split(key)
         logits, cache = f(token, cache)
         token = random.categorical(subkey, logits / temperature)
-        print(itoc[int(token)], end='')
+        print(tokenizer.id_to_token(int(token)), end='')
     print()
     
     return cache
+
