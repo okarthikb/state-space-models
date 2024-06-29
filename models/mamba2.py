@@ -16,12 +16,12 @@ from beartype import beartype as typechecker
 @dataclass
 class ModelArgs:
     d_model: int
+    d_head: int 
     n_layers: int
     vocab_size: int
     d_state: int = 64
     d_conv: int = 4
     expand: int = 2
-    d_head: int = 128
     A_init_range: Tuple[int, int] = (1, 16)
     dt_min: float = 0.001
     dt_max: float = 0.1
@@ -85,10 +85,14 @@ def initialize_params(key, args):
 
     norm_y = jnp.ones((args.n_layers, args.d_inner))
     
-    in_proj = random.truncated_normal(layers_keys[0], -2, 2, (args.n_layers, args.d_model, args.d_in_proj)) * d_model_scale
+    in_proj = random.truncated_normal(
+        layers_keys[0], -2, 2, (args.n_layers, args.d_model, args.d_in_proj)
+    ) * d_model_scale
     in_proj_bias = jnp.zeros((args.n_layers, args.d_in_proj)) if args.bias else None
     
-    conv = random.truncated_normal(layers_keys[1], -2, 2, (args.n_layers, args.conv_dim, args.d_conv)) * conv_dim_scale
+    conv = random.truncated_normal(
+        layers_keys[1], -2, 2, (args.n_layers, args.conv_dim, args.d_conv)
+    ) * conv_dim_scale
     conv_bias = jnp.zeros((args.n_layers, args.conv_dim)) if args.conv_bias else None
     
     dt = random.uniform(layers_keys[2], (args.n_layers, args.n_heads))
@@ -99,7 +103,9 @@ def initialize_params(key, args):
     A_log = jnp.log(random.uniform(layers_keys[3], (args.n_layers, args.n_heads), minval=A_min, maxval=A_max))
     D = jnp.ones((args.n_layers, args.n_heads))
     
-    out_proj = random.truncated_normal(layers_keys[4], -2, 2, (args.n_layers, args.d_inner, args.d_model)) * d_inner_scale
+    out_proj = random.truncated_normal(
+        layers_keys[4], -2, 2, (args.n_layers, args.d_inner, args.d_model)
+    ) * d_inner_scale
     out_proj_bias = jnp.zeros((args.n_layers, args.d_model)) if args.bias else None
     
     layers = LayerParams(
@@ -254,7 +260,7 @@ def mamba2(args, params, tokens):
         # normalization
         y = rms_norm_gated(params.norm_y, y, z)
 
-        # (l, d_inner) -> (l, d_model) 
+        # (seq_len, d_inner) -> (seq_len, d_model) 
         return y @ params.out_proj + zero_or(params.out_proj_bias)
 
     def f(x, params):
@@ -291,12 +297,11 @@ def mamba2_step(args, valid_logits, params, token, cache):
         dt = nn.softplus(dt + params.dt_bias)
 
         # discretization
-        xdt = einsum(x, dt, 'nh dh, nh -> nh dh')
-        Adt_log = -jnp.exp(params.A_log) * dt
-        Adt = jnp.exp(Adt_log)
+        dA = jnp.exp(-jnp.exp(params.A_log) * dt)
+        dBx = einsum(B, x, dt, 'n, nh dh, nh -> nh dh n')
         
         # SSM step
-        ssm_state = einsum(Adt, ssm_state, 'nh, nh dh n -> nh dh n') + einsum(B, xdt, 'n, nh dh -> nh dh n')
+        ssm_state = einsum(dA, ssm_state, 'nh, nh dh n -> nh dh n') + dBx 
         y = ssm_state @ C.T + einsum(x, params.D, 'nh dh, nh -> nh dh')
         
         # combine heads
@@ -313,21 +318,20 @@ def mamba2_step(args, valid_logits, params, token, cache):
         h, cache = block(rms_norm_gated(params.norm, x, None), params, *cache)
         return x + h, cache
     
-    x = params.embedding[token]
-
     if cache is None:
         cache = (
             jnp.zeros((args.n_layers, args.conv_dim, args.d_conv - 1)),
             jnp.zeros((args.n_layers, args.n_heads, args.d_head, args.d_state))
         )
 
-    x, cache = lax.scan(f, x, (params.layers, cache))
+    x, cache = lax.scan(f, params.embedding[token], (params.layers, cache))
 
     logits = rms_norm_gated(params.norm_f, x, None) @ params.embedding.T
 
     return logits[:args.orig_vocab_size if valid_logits else args.vocab_size], cache
 
 
+# same as Mamba
 def generate(key, args, params, tokenizer, steps, temperature, prompt, cache=None):
     print(prompt, end='')
     
