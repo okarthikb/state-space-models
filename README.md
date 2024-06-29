@@ -3,5 +3,6 @@
 implementations of SSMs and related algorithms
 
 models:
-    - mamba
-    - mamba2
+  - mamba
+  - mamba2
+
