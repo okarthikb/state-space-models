@@ -430,11 +430,7 @@ def test():
         logits, state = vmap(model.step)(token, state) 
      
     assert jnp.allclose(logits_batch[:, -1], logits, rtol=1e-3, atol=1e-5)
-    
-    print(logits_batch[:, -1])
-    print()
-    print(logits)
-    print()
+
     print('parallel and sequential passes are consistent')
 
 
