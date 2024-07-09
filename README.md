@@ -3,7 +3,7 @@
 implementations of SSMs and related algorithms in JAX
 
 models:
-  - mamba
-  - mamba2
-  - xlstm
+  - mamba [jax]
+  - mamba2 [jax, equinox]
+  - xlstm [equinox]
 
